@@ -1,0 +1,104 @@
+---
+title: "Dickey Fuller A"
+author: "Sofia Serrano"
+date: '2023-05-21'
+output: html_document
+---
+Se carga el script de funciones y las librerías necesarias.
+```{r}
+source(file.choose())
+```
+Esta prueba se hará por pasos para facilitar la manipulación de los datos y los parámetros. 
+
+# Esquema 3. 
+## 1. P parsimonía, ruido blanco y significancia.
+
+Función con tabla de dummies para ruido blanco y significancia. 
+```{r}
+P_ESQUEMA3 <- function(y,alpha=0.05){
+   
+  N <- length(y)
+  p <- N/4
+  tablita <- matrix(NA,ncol = 3,nrow = p)
+  row.names(tablita) <- c(1:p)
+  colnames(tablita) <- c("Signif","RB","Choose")
+  #SIGNIFICANCIA Y RUIDO BLANCO -----------------------------------------------------
+  ##Significancia ----------------------------------
+  for (i in 1:p) {
+    
+    #Matriz diseño esquema 3 
+       delt <- MXDELT(y,i)
+       x <- cbind(1,c((i+1):N),delt)
+    #Coeficientes
+    deltay <- DIFF(y)
+     yusar <- deltay[i:(N-1)]
+     
+     regre <- REGRESION(x,yusar)
+      coef <- regre$coef
+    yestim <- regre$ystim
+         e <- regre$e
+     sigma <- regre$sigma
+    varcov <- regre$varcov
+    desves <- sqrt(varcov[(i+2),(i+2)])
+      tsig <- coef[(i+2)]/desves
+       vct <- qt((1-(alpha/2)),(N-(i+2)-i))
+    ##Ruido Blanco
+        lb <- LJUNGBOX(e,0,i,0,0.05)
+       lb1 <- lb[1]
+      vclb <- lb[2]
+    #Tabla de decisión ------------ 
+  
+    #Condicional para significancia
+    if(tsig>vct|tsig<(-vct)){
+      tablita[i,1] <- 1
+    } else{
+      tablita[i,1] <- 0
+    }
+    
+    #Condicional para ruido blanco
+      
+       if(lb1<vclb){
+         tablita[i,2] <- 1
+       } else{
+         tablita[i,2] <- 0
+       }   
+       
+    #Condicional decisión
+      if((tablita[i,2]+ tablita[i,1])==2){
+        tablita[i,3] <- 1
+      } else{
+        tablita[i,3] <- 0
+      }
+
+    #Condicional para terminar iteración
+      if(tablita[i,3]==1){
+        break
+      }
+      
+  } #Cierre primer for
+  
+  tablita <- na.omit(tablita)
+  tablita
+
+# PRUEBAS TAU TAU ---------------------------------------------------------
+  pusar <- nrow(tablita)
+  
+  listap <- list(p=pusar, tabla=tablita, ystim=yestim,e=e,varcov=varcov,desves=desves)
+  return(listap)
+
+}
+```
+
+#### 1.2. Cargar serie y guardar resultados.
+```{r}
+y <- DGPS(100,1,0,miu = 1,beta =0,phi = 1)
+solu <- P_ESQUEMA3(y,0.05)
+solu$tabla
+pusar <- solu$p
+ystim <- solu$ystim
+e <- solu$e
+desves <- solu$desves
+```
+
+## 2. Prueba raíz unitaria (tautau) y existencia de tendencia determinística. 
+

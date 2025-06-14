@@ -1,0 +1,331 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+#DGPS
+Se simularán los 4 procesos generadores de datos y para cada uno se calcularán la media y la varianza. 
+Iniciaremos con el DGP1.
+
+## DGP1
+Se crea una función para simular cualquier DGP con la cantidad de simulaciones y observaciones que se desee, también, la deriva, el phi y la desviación estándar del proceso quedarán flexibles. 
+El DGP1, dentro de la función se generará como: 
+$$
+x_{t}= \mu + \phi.x_{t-1} + e_{t}
+$$
+```{r, echo=FALSE}
+DGPS <- function(tt,nsimul,valor0,miu,beta,phi,sdproceso){
+  
+tusar <- tt+1000
+#Matrices vacías de choques y dgps con columnas iguales al # de simulaciones
+choques <- matrix(NA, nrow = tusar,ncol=1)
+dgp <- matrix(NA, nrow = tusar,ncol = 1)
+dgp[1,] <- valor0
+dgpsimul <- matrix(NA, nrow = tusar,ncol = nsimul)
+
+  #Tendencia
+  contador <- c(1:tusar)
+  
+for (s in 1:nsimul) {
+#choques 
+choques[,1] <- rnorm(n = tusar,mean = 0,sd = sdproceso)
+#for para número de simulaciones que quiero
+  #dgps
+
+  for (t in 2:tusar) {
+    dgp[t,1] <- miu + beta*contador[t] + phi*dgp[(t-1),1] + choques[t,1]
+  }
+#Llenar por # de simulaciones
+dgpsimul[,s] <- dgp
+}
+dgpsimul <- dgpsimul[-(1:1000),]
+return(dgpsimul)
+}
+
+```
+Generamos los datos de la simulación con parámetros escogidos e implantamos una semilla
+$$
+N\ obserbaciones=400\\
+N \ simulaciones=1\\
+\mu=1.3\\
+\phi=0.1\\
+sd\ proceso=1\\
+valor\ inicial=0\\
+\beta=0
+$$
+
+```{r, echo=FALSE}
+tt1 <- 400
+nsimul1 <- 1
+miu1 <- 1.3
+phi1 <- 0.7
+sde1 <- 1
+valor01 <- 0
+sdproceso1 <- 1
+beta1 <- 0
+set.seed(100)
+dgp1 <- DGPS(tt1,nsimul1,valor01,miu1,beta1, phi1,sdproceso1)
+dgp1x <- data.frame(dgp1)
+```
+
+**Comparación de la media  y varianza con datos simulados y con fórmula**
+La media y la varianza se estiman desde las fórmulas obtenidas en clase como: 
+$$
+E[X_{t}]= \frac{\mu}{1- \phi}\\
+VAR(X_{t})= \frac{\sigma_{e}^2}{1- \phi^2}
+$$
+Para el DGP1 se obtienen los siguientes resultados: 
+
+```{r, echo=FALSE}
+#Media
+medsimul1 <- mean(dgp1)
+medformu1 <- miu1/(1-phi1)
+
+#Varianza
+varformul1 <- (sdproceso1^2)/(1-phi1^2)
+varsimul1 <- var(dgp1)
+
+tablix <- data.frame(matrix(c(medsimul1,medformu1, varsimul1, varformul1), ncol = 2,nrow = 2, byrow = F))
+rownames(tablix) <- c("Simulado","Fórmula")
+colnames(tablix) <- c("Media","Varianza")
+tablix
+```
+Graficamos nuestro DGP1
+```{r, echo=FALSE}
+library("ggplot2")
+ggplot(data = dgp1x, aes(x = 1:tt1)) + 
+  geom_line(aes(y = dgp1, colour = "dgp1"), size = 0.7) +
+  geom_line(aes(y = medsimul1, colour = "medsimul1"), size = 0.7) +
+  geom_line(aes(y = medformu1, colour = "medformu1"), size = 0.7) +
+  geom_line(aes(y = varformul1, colour = "varformul1"), size = 0.7) +
+  geom_line(aes(y = varsimul1, colour = "varsimul1"), size = 0.7) +
+  theme(
+    panel.background = element_rect(fill = "#FFFFFF"), 
+    panel.border = element_rect(fill = "transparent", color = "cornflowerblue", size = 0.8)
+  ) + 
+  labs(
+    title = "DGP1",
+    x = "# Obs",
+    y = "Freq",
+  )
+```
+Como se puede ver, para este proceso, al ser un proceso estacionario y autorregresivo, la media y la varianza estimadas por la fórmula y de manera tradicional son bastante parecidas. 
+
+# DGP2
+El DGP2, dentro de la función se generará como: 
+$$
+x_{t}= \mu +\beta.t+ \phi.x_{t-1} + e_{t}
+$$
+
+Generamos los datos de la simulación con parámetros escogidos e implantamos una semilla
+$$
+N\ obserbaciones=100\\
+N \ simulaciones=1\\
+\mu=1.3\\
+\phi=0.63\\
+sd\ proceso=1\\
+valor\ inicial=0\\
+\beta=0.2
+$$
+
+```{r, echo=FALSE}
+tt2 <- 100
+miu2 <- 1.3
+phi2 <- 0.63
+beta2 <- 0.2
+set.seed(130)
+dgp2 <- DGPS(tt2,nsimul1,valor01,miu2,beta2, phi2,sdproceso1)
+dgp2x <- data.frame(dgp2)
+```
+**Comparación de la media  y varianza con datos simulados y con fórmula**
+La media y la varianza se estiman desde las fórmulas obtenidas en clase como: 
+$$
+E[X_{t}]= \frac{\mu}{1- \phi}-\frac{\phi.\beta}{(1- \phi)^2}+\frac{\beta.t}{1- \phi}\\
+VAR(X_{t})= \frac{\sigma_{e}^2}{1- \phi^2}
+$$
+```{r, echo=FALSE}
+#Media
+medsimul2 <- mean(dgp2)
+#Vector para guardar las medias a lo largo del tiempo 
+medformu2 <- matrix(NA, ncol = 1, nrow = tt2)
+prim <- (miu2/(1-phi2))
+seg <- (phi2*beta2)/((1-phi2)^2)
+for (i in 1:tt2) {
+  medformu2[i] <- prim-seg+((beta2*i)/(1-phi2))
+}
+
+#Varianza
+varformul2 <- (sdproceso1^2)/(1-(phi2^2))
+varsimul2 <- var(dgp2)
+
+tablix <- data.frame(matrix(c(medsimul2,"depende de t", varsimul2, varformul2), ncol = 2,nrow = 2, byrow = F))
+rownames(tablix) <- c("Simulado","Fórmula")
+colnames(tablix) <- c("Media","Varianza")
+tablix
+```
+Graficamos nuestro DGP2
+```{r, echo=FALSE}
+library("ggplot2")
+ggplot(data = dgp2x, aes(x = 1:tt2)) + 
+  geom_line(aes(y = dgp2, colour = "dgp2"), size = 0.7) +
+  geom_line(aes(y = medsimul2, colour = "medsimul2"), size = 0.7) +
+  #geom_line(aes(y = medformu2, colour = "medformu2"), size = 0.7) +
+  #geom_line(aes(y = varsimul2, colour = "varsimul2"), size = 0.7) +
+  theme(
+    panel.background = element_rect(fill = "#FFFFFF"), 
+    panel.border = element_rect(fill = "transparent", color = "cornflowerblue", size = 0.8)
+  ) + 
+  labs(
+    title = "DGP2",
+    x = "# Obs",
+    y = "Freq",
+  )
+```
+En el DGP2 se tiene una media estable al rededor de la tendencia determinística, pero la varianza depende del tiempo.
+ 
+# DGP3
+El DGP3, dentro de la función se generará como: 
+$$
+x_{t}=x_{t-1} + e_{t}
+$$
+Generamos los datos de la simulación con parámetros escogidos e implantamos una semilla
+$$
+N\ obserbaciones=200\\
+N \ simulaciones=1\\
+\mu=0\\
+\phi= 1\\
+sd\ proceso=1\\
+valor\ inicial=0\\
+\beta=0
+$$
+
+```{r, echo=FALSE}
+tt3 <- 200
+miu3 <- 0
+phi3 <- 1
+beta3 <- 0
+set.seed(100)
+dgp3 <- DGPS(tt3,nsimul1,valor01,miu3,beta3, phi3,sdproceso1)
+dgp3x <- data.frame(dgp3)
+```
+**Comparación de la media  y varianza con datos simulados y con fórmula**
+La media y la varianza se estiman desde las fórmulas obtenidas en clase como: 
+$$
+E[X_{t}]= X_{0}\\
+VAR(X_{t})= t.\sigma_{e}^2
+$$
+
+```{r, echo=FALSE}
+#Media
+medsimul3 <- mean(dgp3)
+#Vector para guardar las medias a lo largo del tiempo 
+medformu3 <- dgp3[1]
+
+#Varianza
+varformul3 <- matrix(NA,ncol = 1, nrow = tt3)
+for (i in 1:tt3) {
+  varformul3[i] <- i*(sdproceso1)^2
+}
+
+varsimul3 <- var(dgp3)
+
+tablix <- data.frame(matrix(c(medsimul3,medformu3, varsimul3, "depende de t"), ncol = 2,nrow = 2, byrow = F))
+rownames(tablix) <- c("Simulado","Fórmula")
+colnames(tablix) <- c("Media","Varianza")
+tablix
+```
+Graficamos nuestro DGP3
+```{r, echo=FALSE}
+library("ggplot2")
+ggplot(data = dgp3x, aes(x = 1:tt3)) + 
+  geom_line(aes(y = dgp3, colour = "dgp2"), size = 0.7) +
+  geom_line(aes(y = medsimul3, colour = "medsimul2"), size = 0.7) +
+  geom_line(aes(y = medformu3, colour = "medformu2"), size = 0.7) +
+  #geom_line(aes(y = varformul3, colour = "varformul2"), size = 0.7) +
+  #geom_line(aes(y = varsimul3, colour = "varsimul2"), size = 0.7) +
+  theme(
+    panel.background = element_rect(fill = "#FFFFFF"), 
+    panel.border = element_rect(fill = "transparent", color = "cornflowerblue", size = 0.8)
+  ) + 
+  labs(
+    title = "DGP3",
+    x = "# Obs",
+    y = "Freq",
+  )
+```
+
+# DGP4
+El DGP4, dentro de la función se generará como: 
+$$
+x_{t}= \mu +x_{t-1} + e_{t}
+$$
+Generamos los datos de la simulación con parámetros escogidos e implantamos una semilla
+$$
+N\ obserbaciones=200\\
+N \ simulaciones=1\\
+\mu=2\\
+\phi= 1\\
+sd\ proceso=1\\
+valor\ inicial=0\\
+\beta=0
+$$
+
+```{r, echo=FALSE}
+miu4 <- 2
+set.seed(300)
+dgp4 <- DGPS(tt2,nsimul1,valor01,miu4,beta3, phi3,sdproceso1)
+dgp4x <- data.frame(dgp4)
+```
+**Comparación de la media  y varianza con datos simulados y con fórmula**
+La media y la varianza se estiman desde las fórmulas obtenidas en clase como: 
+$$
+E[X_{t}]= t*\mu+X_{0}\\
+VAR(X_{t})= t.\sigma_{e}^2
+$$
+
+```{r, echo=FALSE}
+#Media
+medsimul4 <- mean(dgp4)
+#Vector para guardar las medias a lo largo del tiempo 
+
+medformul4 <- matrix(NA, ncol = 1, nrow = tt2)
+for (i in 1:tt2) {
+  medformul4[i] <- (i*miu2) + dgp4[1]
+}
+
+#Varianza
+varformul4 <- matrix(NA,ncol = 1, nrow = tt2)
+for (i in 1:tt2) {
+  varformul4[i] <- i*(sdproceso1)^2
+}
+
+varsimul4 <- var(dgp4)
+
+tablix <- data.frame(matrix(c(medsimul4,"depende del tiempo", varsimul4, "depende de t"), ncol = 2,nrow = 2, byrow = F))
+rownames(tablix) <- c("Simulado","Fórmula")
+colnames(tablix) <- c("Media","Varianza")
+tablix
+```
+Graficamos nuestro DGP3
+```{r, echo=FALSE}
+library("ggplot2")
+ggplot(data = dgp4x, aes(x = 1:tt2)) + 
+  geom_line(aes(y = dgp4, colour = "dgp4"), size = 0.7) +
+  #geom_line(aes(y = medsimul4, colour = "medsimul4"), size = 0.7) +
+  geom_line(aes(y = medformul4, colour = "medformu4"), size = 0.7) +
+  #geom_line(aes(y = varformul4, colour = "varformul4"), size = 0.7) +
+  #geom_line(aes(y = varsimul4, colour = "varsimul4"), size = 0.7) +
+  theme(
+    panel.background = element_rect(fill = "#FFFFFF"), 
+    panel.border = element_rect(fill = "transparent", color = "cornflowerblue", size = 0.8)
+  ) + 
+  labs(
+    title = "DGP4",
+    x = "# Obs",
+    y = "Freq",
+  )
+```
+
+

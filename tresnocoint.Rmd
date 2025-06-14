@@ -1,0 +1,208 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+#Tres variables no cointegradas
+Para la simulación de 3 variables no cointegradas se tratarán de explicar los robos en la ciudad de Bogotá están explicados por los robos en las ciudades de Luxemburgo y Roma.
+
+$$
+Robos\ Bogotá_{t}= Robos\ Luxemburgo_{t}+Robos\ Roma_{t}
+$$
+
+
+## Simulación de los tres procesos: 
+$$
+Procesos\ Simulados: \\
+r_t=\mu_{rt} +\epsilon_{rt}\\
+\pi_t=\mu_{\pi t} +\epsilon_{\pi t}\\
+i_{nt}=\mu_{it} +\epsilon_{it}\\
+Donde\\
+\epsilon_{rt}=0.5\epsilon_{rt-1}+\eta_{rt}\\
+\epsilon_{\pi t}=0.8\epsilon_{\pi t-1}+\eta_{\pi t}\\
+\epsilon_{it}=0.1\epsilon_{it-1}+\eta_{it}\\
+\mu_{rt}= 1.8+\mu_{rt-1}+e_{rt}\\
+\mu_{\pi t}= 0.3 +\mu_{\pi t-1}+e_{\pi t}\\
+y \ finalmente\\
+\mu_{it}= 11+\mu_{it-1}+e_{i t}
+$$
+
+Llamar las funciones necesarias: 
+```{r}
+library(ggplot2)
+source(file.choose())
+```
+
+Caminatas aleatorias:
+```{r}
+n <- 150
+set.seed(120)
+muy <- matrix(DGPS(n,1,0,1.8,0,1,1),ncol = 1,nrow = n)
+muz <- matrix(DGPS(n,1,0,0.3,0,1,1),ncol = 1,nrow = n)
+muw <- matrix(DGPS(n,1,0,11,0,1,1),ncol = 1,nrow = n)
+```  
+
+Procesos simulados: 
+```{r}
+y <- muy[-(1:50)]
+z <- muz[-(1:50)]
+w <- muw[-(1:50)]
+simulaciones <- as.data.frame(matrix(c(y,z,w),ncol = 3, nrow = n-50, byrow = T))
+colnames(simulaciones) <- c("yt", "xt", "wt")
+```
+
+Gráficos: 
+```{r}
+
+ggplot(data = simulaciones, aes(x = 1:(n-50))) + 
+  geom_line(aes(y = y, colour = "y"), size = 0.7) + 
+  geom_line(aes(y = z, colour = "z"), size = 0.7) +
+  geom_line(aes(y = w, colour = "w"), size = 0.7) +
+  theme(
+    panel.background = element_rect(fill = "#FFFFFF"), 
+    panel.border = element_rect(fill = "transparent", color = "cornflowerblue", size = 0.8)
+  ) + 
+  labs(
+    title = "Cointegración de tres variables",
+    x = "# Obs",
+    y = "Freq",
+  )
+```
+
+## Prueba de cointegración. 
+Escogemos la variable endógena y regresionamos en función de sus fundamentales.
+
+```{r}
+x <- matrix(cbind(1,y,z),ncol = 3)
+regre3c <- REGRESION(x,w)
+e1 <- regre3c$e
+coef1 <- regre3c$coef
+varc1 <- regre3c$varcov
+```
+
+Función para encontrar el p que me da parsimonía para la regresión de los errores estimados.
+```{r}
+P_ESQUEMA1 <- function(y,alpha=0.05){
+   
+  N <- length(y)
+  p <- N/4
+  
+  #Esquema sin parte aumentada 
+  #Matriz diseño esquema 3 
+       x1 <- MXDELT(y,1)
+    #Coeficientes
+    deltay1 <- DIFF(y)
+     yusar1 <- deltay1[1:(N-1)]
+     
+     regre1 <- REGRESION(x1,yusar1)
+      coef1 <- regre1$coef
+    yestim1 <- regre1$ystim
+         e1 <- regre1$e
+     sigma1 <- regre1$sigma
+    varcov1 <- regre1$varcov
+    desves1 <- sqrt(varcov1[1,1])
+      tsig1 <- coef1[1]/desves1
+       vct1 <- qt((1-(alpha/2)),(N-(3)-1))
+    ##Ruido Blanco
+        lb1 <- LJUNGBOX(e1,0,1,0,0.05)
+       lb11 <- lb1[1]
+      vclb1 <- lb1[2]
+    
+      if(lb11<vclb1){
+         pusar <- 1
+         listap <- list(p=pusar, tabla=1, ystim=yestim1,e=e1,varcov=varcov1, coef=coef1)
+       } else{
+  tablita <- matrix(NA,ncol = 3,nrow = p)
+  row.names(tablita) <- c(1:p)
+  colnames(tablita) <- c("Signif","RB","Choose")
+  #SIGNIFICANCIA Y RUIDO BLANCO -----------------------------------------------------
+  ##Significancia ----------------------------------
+  for (i in 1:p) {
+    
+    #Matriz diseño esquema 3 
+       x <- MXDELT(y,i)
+    #Coeficientes
+    deltay <- DIFF(y)
+     yusar <- deltay[i:(N-1)]
+     
+     regre <- REGRESION(x,yusar)
+      coef <- regre$coef
+    yestim <- regre$ystim
+         e <- regre$e
+     sigma <- regre$sigma
+    varcov <- regre$varcov
+    desves <- sqrt(varcov[(i),(i)])
+      tsig <- coef[(i)]/desves
+       vct <- qt((1-(alpha/2)),(N-(i)-i))
+    ##Ruido Blanco
+        lb <- LJUNGBOX(e,0,i,0,0.05)
+       lb1 <- lb[1]
+      vclb <- lb[2]
+    #Tabla de decisión ------------ 
+  
+    #Condicional para significancia
+    if(tsig>vct|tsig<(-vct)){
+      tablita[i,1] <- 1
+    } else{
+      tablita[i,1] <- 0
+    }
+    
+    #Condicional para ruido blanco
+      
+       if(lb1<vclb){
+         tablita[i,2] <- 1
+       } else{
+         tablita[i,2] <- 0
+       }   
+       
+    #Condicional decisión
+      if((tablita[i,2]+ tablita[i,1])==2){
+        tablita[i,3] <- 1
+      } else{
+        tablita[i,3] <- 0
+      }
+
+    #Condicional para terminar iteración
+      if(tablita[i,3]==1){
+        break
+      }
+      
+  } #Cierre primer for
+  
+  tablita <- na.omit(tablita)
+  tablita
+  
+  pusar <- nrow(tablita)
+  
+  listap <- list(p=pusar, tabla=tablita, ystim=yestim,e=e,varcov=varcov,desves=desves, coef=coef)
+       }
+      
+  return(listap)
+
+}
+```
+Meto valores a la función. 
+```{r}
+eestim2 <- P_ESQUEMA1(e1,0.05)
+eestim2$p
+varcov3 <- eestim2$varcov
+gamma3 <- eestim2$coef
+dim(gamma3)
+```
+
+Hacemos test tau
+```{r}
+taue2 <- (gamma3)/sqrt(varcov3[1,1]) 
+if(taue2<(-3.25)){
+  print("Las tres variables están cointegradas")
+} else{
+  print("las variables no están cointegradas")
+}
+```
+
+
+Referencias: 
+IS THE BOOST IN OIL PRICES AFFECTING THE APPRECIATION OF REAL EXCHANGE RATE?: EMPIRICAL EVIDENCE OF “DUTCH DISEASE” IN COLOMBIA PILAR PONCELA EVA SENRA LYA PAOLA SIERRA. (n.d.). Retrieved May 23, 2023, from https://www.funcas.es/wp-content/uploads/Migracion/Publicaciones/PDF/1821.pdf
+
